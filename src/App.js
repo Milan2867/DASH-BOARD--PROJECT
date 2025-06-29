@@ -1,12 +1,18 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Register from './components/Register';
 import FileTransfer from './components/FileTransfer';
+import Profile from './components/Profile';
 
 function App() {
-  // Simple auth check: is there a token in localStorage?
-  const isAuthenticated = !!localStorage.getItem('token');
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
+
+  useEffect(() => {
+    const handleStorage = () => setIsAuthenticated(!!localStorage.getItem('token'));
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   return (
     <Router>
@@ -17,6 +23,12 @@ function App() {
           path="/transfer"
           element={
             isAuthenticated ? <FileTransfer /> : <Navigate to="/login" replace />
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            isAuthenticated ? <Profile /> : <Navigate to="/login" replace />
           }
         />
         {/* Default route: redirect to /transfer if logged in, else to /login */}

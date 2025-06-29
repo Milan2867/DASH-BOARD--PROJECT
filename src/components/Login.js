@@ -20,7 +20,7 @@ function Login() {
       });
       localStorage.setItem('token', res.data.token);
       setMessage('Login successful! Redirecting...');
-      setTimeout(() => navigate('/transfer'), 1000);
+      setTimeout(() => { window.location.href = '/transfer'; }, 1000);
     } catch (err) {
       setMessage(err.response?.data?.error || 'Login failed');
     }

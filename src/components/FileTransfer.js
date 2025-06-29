@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { IconButton, Snackbar, Alert, FormControl, InputLabel, Select, MenuItem, Button, LinearProgress, Box, Typography, Paper } from '@mui/material';
+import { IconButton, Snackbar, Alert, FormControl, InputLabel, Select, MenuItem, Button, LinearProgress, Box, Typography, Paper, Avatar } from '@mui/material';
+import axios from 'axios';
+
+const CHUNK_SIZE = 64 * 1024; // 64KB per chunk
 
 function FileTransfer() {
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -11,6 +14,7 @@ function FileTransfer() {
   const [receivedFiles, setReceivedFiles] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const socketRef = useRef();
+  const [transferHistory, setTransferHistory] = useState([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -28,6 +32,16 @@ function FileTransfer() {
 
     socketRef.current.on('receiveFile', (data) => {
       setReceivedFiles((prev) => [...prev, data]);
+      setTransferHistory(prev => [
+        ...prev,
+        {
+          type: 'received',
+          fileName: data.fileName,
+          to: data.from,
+          from: data.from,
+          date: new Date(),
+        }
+      ]);
       setSnackbar({ open: true, message: `Received file '${data.fileName}' from ${data.from}`, severity: 'success' });
     });
 
@@ -49,20 +63,48 @@ function FileTransfer() {
       setSnackbar({ open: true, message: 'Please select a user and a file.', severity: 'error' });
       return;
     }
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    let currentChunk = 0;
     const reader = new FileReader();
+
     reader.onload = (e) => {
-      const fileBuffer = e.target.result;
-      setProgress(0);
-      // For simplicity, send the whole file at once. For large files, use chunking.
-      socketRef.current.emit('sendFile', {
+      const chunkBuffer = e.target.result;
+      socketRef.current.emit('sendFileChunk', {
         to: selectedUser,
         fileName: file.name,
-        fileBuffer
+        totalChunks,
+        currentChunk,
+        chunkBuffer,
+        fileSize: file.size,
+        type: file.type,
       });
-      setProgress(100);
-      setSnackbar({ open: true, message: 'File sent!', severity: 'success' });
+      setProgress(Math.round(((currentChunk + 1) / totalChunks) * 100));
+      currentChunk++;
+      if (currentChunk < totalChunks) {
+        readNextChunk();
+      } else {
+        setTransferHistory(prev => [
+          ...prev,
+          {
+            type: 'sent',
+            fileName: file.name,
+            to: selectedUser,
+            from: socketRef.current.user?.username,
+            date: new Date(),
+          }
+        ]);
+        setSnackbar({ open: true, message: 'File sent!', severity: 'success' });
+      }
     };
-    reader.readAsArrayBuffer(file);
+
+    const readNextChunk = () => {
+      const start = currentChunk * CHUNK_SIZE;
+      const end = Math.min(file.size, start + CHUNK_SIZE);
+      const blob = file.slice(start, end);
+      reader.readAsArrayBuffer(blob);
+    };
+
+    readNextChunk();
   };
 
   const downloadFile = (fileData) => {
@@ -101,7 +143,10 @@ function FileTransfer() {
           >
             <MenuItem value="">Select user</MenuItem>
             {onlineUsers.map((user) => (
-              <MenuItem key={user} value={user}>{user}</MenuItem>
+              <MenuItem key={user} value={user}>
+                <Avatar src={user.avatar} alt={user.username} />
+                {user}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
@@ -150,6 +195,7 @@ function FileTransfer() {
             ))}
           </ul>
         </Box>
+        <Button onClick={() => window.location.href = '/profile'}>Profile</Button>
         <Snackbar
           open={snackbar.open}
           autoHideDuration={3000}
