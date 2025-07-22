@@ -5,6 +5,8 @@ import { IconButton, Snackbar, Alert, FormControl, InputLabel, Select, MenuItem,
 import axios from 'axios';
 
 const CHUNK_SIZE = 64 * 1024; // 64KB per chunk
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FILE_TYPES = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx', '.txt', '.zip', '.rar'];
 
 function FileTransfer() {
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -22,7 +24,8 @@ function FileTransfer() {
       setSnackbar({ open: true, message: 'Please login first.', severity: 'error' });
       return;
     }
-    socketRef.current = io('http://localhost:5000', {
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    socketRef.current = io(API_URL, {
       auth: { token }
     });
 
@@ -45,13 +48,48 @@ function FileTransfer() {
       setSnackbar({ open: true, message: `Received file '${data.fileName}' from ${data.from}`, severity: 'success' });
     });
 
+    socketRef.current.on('fileError', (data) => {
+      setSnackbar({ open: true, message: data.message, severity: 'error' });
+      setProgress(0);
+    });
+
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
     };
   }, []);
 
+  const validateFile = (file) => {
+    if (!file) return { valid: false, message: 'No file selected' };
+    
+    if (file.size > MAX_FILE_SIZE) {
+      return { 
+        valid: false, 
+        message: `File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB` 
+      };
+    }
+    
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    if (!ALLOWED_FILE_TYPES.includes(fileExtension)) {
+      return { 
+        valid: false, 
+        message: `File type '${fileExtension}' is not allowed. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}` 
+      };
+    }
+    
+    return { valid: true };
+  };
+
   const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      const validation = validateFile(selectedFile);
+      if (!validation.valid) {
+        setSnackbar({ open: true, message: validation.message, severity: 'error' });
+        e.target.value = ''; // Clear the input
+        return;
+      }
+      setFile(selectedFile);
+    }
   };
 
   const handleUserChange = (e) => {
@@ -63,6 +101,13 @@ function FileTransfer() {
       setSnackbar({ open: true, message: 'Please select a user and a file.', severity: 'error' });
       return;
     }
+
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      setSnackbar({ open: true, message: validation.message, severity: 'error' });
+      return;
+    }
+
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     let currentChunk = 0;
     const reader = new FileReader();
@@ -93,7 +138,7 @@ function FileTransfer() {
             date: new Date(),
           }
         ]);
-        setSnackbar({ open: true, message: 'File sent!', severity: 'success' });
+        setSnackbar({ open: true, message: 'File sent successfully!', severity: 'success' });
       }
     };
 
@@ -133,6 +178,11 @@ function FileTransfer() {
           </IconButton>
         </Box>
         <Typography variant="h5" align="center" gutterBottom>File Transfer</Typography>
+        
+        <Typography variant="caption" color="textSecondary" sx={{ mb: 2, display: 'block' }}>
+          Max file size: {MAX_FILE_SIZE / 1024 / 1024}MB | Allowed types: {ALLOWED_FILE_TYPES.join(', ')}
+        </Typography>
+        
         <FormControl fullWidth margin="normal">
           <InputLabel id="user-select-label">Online Users</InputLabel>
           <Select
@@ -161,7 +211,7 @@ function FileTransfer() {
         </Button>
         {file && (
           <Typography variant="body2" sx={{ mt: 1 }}>
-            Selected file: {file.name}
+            Selected file: {file.name} ({(file.size / 1024 / 1024).toFixed(2)}MB)
           </Typography>
         )}
         <Button

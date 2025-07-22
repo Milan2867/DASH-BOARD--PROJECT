@@ -11,12 +11,13 @@ function Register() {
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
   const CHUNK_SIZE = 64 * 1024; // 64KB per chunk
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
     try {
-      await axios.post('http://localhost:5000/api/auth/register', {
+      await axios.post(`${API_URL}/api/auth/register`, {
         username,
         email,
         password,

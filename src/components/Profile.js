@@ -18,7 +18,8 @@ function Profile() {
       return;
     }
 
-    axios.get('http://localhost:5000/api/profile', {
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    axios.get(`${API_URL}/api/profile`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => {
@@ -60,7 +61,8 @@ function Profile() {
     e.preventDefault();
     const token = localStorage.getItem('token');
     try {
-      const res = await axios.put('http://localhost:5000/api/profile', user, {
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const res = await axios.put(`${API_URL}/api/profile`, user, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(res.data);
